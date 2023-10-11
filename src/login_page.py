@@ -1,5 +1,5 @@
 import flet as ft
-import database
+import assets.database as database
 
 def main(page: ft.Page): 
     page.title = "Register Page"
@@ -110,7 +110,7 @@ def main(page: ft.Page):
         Username = UserField.value
         Password = PassField.value
         
-        result = database.command.getAccount(Username)
+        result = database.getAccount(file="database.db", username=Username)
         
         if result[0] == True:
             u = result[1][1]
@@ -136,7 +136,29 @@ def main(page: ft.Page):
         Name = NameField.value
         Email = EmailField.value
         
-        database.command.insert_account(Username, Password, Name, Email)
+        accounts = database.getAllAccount(file="database.db")
+        a = 0
+        SameUsername = None
+        for account in accounts:
+            if Username != account[1]:
+                continue
+            else:
+                SameUsername = True
+                break
+        
+        if SameUsername != True:
+            database.insert_account(file="database.db", username=Username,
+                                            password=Password, name=Name, email=Email)
+            clear_values()
+            errorText.value = "Registed"
+            errorText.color = "Green"
+            page.update()
+            errorText.color = "Red"
+        else:
+            errorText.disabled = False
+            errorText.value = "Username is taken already!"
+            page.update()
+        
     
     def validate(e):
         match page.route:
