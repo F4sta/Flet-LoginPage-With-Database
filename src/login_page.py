@@ -1,7 +1,16 @@
+""" Import modules """
 import flet as ft
 import assets.database as database
+import assets.validate as validate
+import os
+
+if not os.path.isfile(database.db_file):
+    database.Create.database(database.db_file)
+    database.Create.table(database.db_file)
 
 def main(page: ft.Page): 
+
+    """ Setting up the main windows """
     page.title = "Register Page"
     page.horizontal_alignment = "center"
     page.vertical_alignment = "center"
@@ -21,7 +30,7 @@ def main(page: ft.Page):
     EmailField = ft.TextField(hint_text="Email")
     EmailField.width = 350
     acceptBox = ft.Checkbox(label="Accept the term of policies")
-    errorText = ft.Text(value="", color="red")
+    responseText = ft.Text(value="", color="red")
     
     BeforeLoginText = ft.Text(value="Already have an account?")
     Login = ft.TextButton(text="Login")
@@ -39,7 +48,7 @@ def main(page: ft.Page):
                                 ft.Row(controls=[BeforeLoginText, Login], alignment=ft.MainAxisAlignment.CENTER, spacing=2),
                                 ft.Row(controls=[acceptBox], alignment=ft.MainAxisAlignment.CENTER),
                                 ft.Row(controls=[RegisterButton], alignment=ft.MainAxisAlignment.CENTER),
-                                ft.Row(controls=[errorText], alignment=ft.MainAxisAlignment.CENTER)
+                                ft.Row(controls=[responseText], alignment=ft.MainAxisAlignment.CENTER)
                         ]
                     )
                 ],
@@ -63,7 +72,7 @@ def main(page: ft.Page):
                                 ft.Row(controls=[BeforeRegisterText, Register], alignment=ft.MainAxisAlignment.CENTER, spacing=2),
                                 ft.Row(controls=[acceptBox], alignment=ft.MainAxisAlignment.CENTER),
                                 ft.Row(controls=[LoginButton], alignment=ft.MainAxisAlignment.CENTER),
-                                ft.Row(controls=[errorText], alignment=ft.MainAxisAlignment.CENTER)
+                                ft.Row(controls=[responseText], alignment=ft.MainAxisAlignment.CENTER)
                         ]
                     )
                 ],
@@ -73,8 +82,8 @@ def main(page: ft.Page):
     LogonView = ft.View("/logon",controls=[ft.Row(controls=[ft.Text(value="GoodJob")],
                                         alignment=ft.MainAxisAlignment.CENTER)],
                     vertical_alignment=ft.MainAxisAlignment.CENTER)
-    
-    ''' Functions '''
+
+    """ Handler for the page views """
     def views_handler(route):
         match route:
             case '/' :
@@ -84,83 +93,90 @@ def main(page: ft.Page):
             case '/logon' :
                 return LogonView
     
+    """ Route changer """
     def switch_route(e):
         match page.route:
             case '/' :
                 clear_values()
                 page.go('/register')
-                UserField.on_change = validate
-                PassField.on_change = validate
-                acceptBox.on_change = validate
+                UserField.on_change = validate_controls
+                PassField.on_change = validate_controls
+                acceptBox.on_change = validate_controls
                 Register.on_click = switch_route
                 LoginButton.on_click = login_callback
                 
             case '/register' :
                 clear_values()
                 page.go('/')
-                UserField.on_change = validate
-                PassField.on_change = validate
-                NameField.on_change = validate
-                EmailField.on_change = validate
-                acceptBox.on_change = validate
+                UserField.on_change = validate_controls
+                PassField.on_change = validate_controls
+                NameField.on_change = validate_controls
+                EmailField.on_change = validate_controls
+                acceptBox.on_change = validate_controls
                 Login.on_click = switch_route
                 RegisterButton.on_click = register_callback
     
+    """ Callback for the Login Button on the Login Page:
+                    Main login callback """
     def login_callback(e):
         Username = UserField.value
         Password = PassField.value
         
-        result = database.getAccount(file="database.db", username=Username)
-        
-        if result[0] == True:
-            u = result[1][1]
-            p = result[1][2]
+        result = database.Get.AccountBy.Username(Username)
+        if result != None:
+            u = result[1]
+            p = result[2]
             
+            print(u,p,result)
             if Username == u and Password == p:
                 page.go("/logon")
             else:
                 UserField.value = ""
                 PassField.value = ""
-                errorText.value = "Username or Password is incorrect!"
+                responseText.value = "Username or Password is incorrect!"
                 page.update()
             
         else:
             UserField.value = ""
             PassField.value = ""
-            errorText.value = "Username or Password is incorrect!"
+            responseText.value = "Username or Password is incorrect!"
             page.update()
-            
+    
+    """ Callback for the Register Button on the Register Page:
+            Insert the User account into the database """
     def register_callback(e):
         Username = UserField.value
         Password = PassField.value
         Name = NameField.value
         Email = EmailField.value
         
-        accounts = database.getAllAccount(file="database.db")
-        a = 0
-        SameUsername = None
-        for account in accounts:
-            if Username != account[1]:
-                continue
-            else:
-                SameUsername = True
-                break
-        
-        if SameUsername != True:
-            database.insert_account(file="database.db", username=Username,
-                                            password=Password, name=Name, email=Email)
-            clear_values()
-            errorText.value = "Registed"
-            errorText.color = "Green"
+        def __respFunc(response_text):
+            responseText.disabled = False
+            responseText.color = "Red"
+            responseText.value = response_text
             page.update()
-            errorText.color = "Red"
-        else:
-            errorText.disabled = False
-            errorText.value = "Username is taken already!"
-            page.update()
+            
+        pswd_bool, pswd_resp = validate.isPasswordValid(Password)
+            
+        if database.Check.Username(Username) != True:
+            if pswd_bool:
+                if database.Check.Email(Email) != True:
+                    if validate.isEmailValid(Email):
+                        database.Insert.account(username=Username, password=Password, name=Name, email=Email)
+                        clear_values()
+                        responseText.disabled = False
+                        responseText.value = "Registed"
+                        responseText.color = "Green"
+                        page.update()
+                    else: __respFunc("Email is not valid!")
+                else: __respFunc("Email is registed already!")
+            else: __respFunc(pswd_resp)
+        else:__respFunc("Username is taken already!")
         
     
-    def validate(e):
+    """ Callback that Validate that the textfields and other controls have values,
+                if they have values the button turns pressable """
+    def validate_controls(e):
         match page.route:
             case "/":
                 if all([UserField.value, PassField.value, acceptBox.value]):
@@ -173,10 +189,12 @@ def main(page: ft.Page):
                 if all([UserField.value, PassField.value, NameField.value, EmailField.value, acceptBox.value]):
                     RegisterButton.disabled = False
                     page.update()
+                    
                 else:
                     RegisterButton.disabled = True
                     page.update()
     
+    """ Clear the values of controls """
     def clear_values():
         UserField.value = ""
         PassField.value = ""
@@ -186,6 +204,7 @@ def main(page: ft.Page):
         LoginButton.disabled = True 
         RegisterButton.disabled = True 
         
+    """ Changes the app route """
     def route_change(route):
         print(page.route)
         page.views.clear()
@@ -194,11 +213,11 @@ def main(page: ft.Page):
         )
     
     ''' Set Functions to Controls '''
-    UserField.on_change = validate
-    PassField.on_change = validate
-    NameField.on_change = validate
-    EmailField.on_change = validate
-    acceptBox.on_change = validate
+    UserField.on_change = validate_controls
+    PassField.on_change = validate_controls
+    NameField.on_change = validate_controls
+    EmailField.on_change = validate_controls
+    acceptBox.on_change = validate_controls
     Register.on_click = switch_route
     LoginButton.on_click = login_callback
     Login.on_click = switch_route
